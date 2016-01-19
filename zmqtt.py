@@ -16,17 +16,19 @@ def unicode2utf8(input):
 
 
 class zmqtt(object):
-	def __init__(self, host = None, port = None):
+	def __init__(self, host = None, port = None, clientId = ""):
 		#pprint("__init__")
 		#pprint(self)
 		self.triggers = []
 		self.isConnected = False
 
-		self.mqtt = mqtt.Client()
+		self.mqtt = mqtt.Client(clientId)
 		self.mqtt.on_message = self._callback(self._on_message)
 		self.mqtt.on_connect = self._callback(self._on_connect)
+		self.mqtt.on_disconnect = self._callback(self._on_disconnect)
 		self.mqtt.on_publish = self._callback(self._on_publish)
 		self.mqtt.on_subscribe = self._callback(self._on_subscribe)
+		#self.mqtt.on_log = self._callback(self._on_log)
 	
 		if host and port:
 			self.connect(host, port)
@@ -42,18 +44,24 @@ class zmqtt(object):
 		self._callTriggers(msg.topic, msg.payload)
 		pass
 	
-	def _on_connect(self, mqttc, obj, rc):
+	def _on_connect(self, mqttc, userdata, flags, result):
 		#print("connected")
 		#pprint(self)
 		self.isConnected = True
 		self._subscribeTriggers()
 		#self.mqtt.subscribe("#")
+		print("connect result: ", result)
 	
+	def _on_disconnect(self, client, userdata, rc):
+		print(client, userdata, rc)
+
 	def _on_publish(self, mqttc, obj, mid):
 		pass
 	
 	def _on_subscribe(self, mqttc, obj, mid, granted_qos):
 		pass
+	def _on_log(self, client, userdata, level, buf):
+		print("Log: ", client, userdata, level, buf)
 	
 	def _decodeJSON(self, jsondata):
 		try:
@@ -96,7 +104,7 @@ class zmqtt(object):
 
 	def _subscribeTriggers(self):
 		for t in self.triggers:
-			print(t)
+			print("subscribeTriggers: ", t)
 			self.mqtt.subscribe(t[0])
 
 	def publish(self, topic, data, format="json", qos=0, retain=False):
@@ -113,6 +121,9 @@ class zmqtt(object):
 	'''
 	def start(self):
 		self.mqtt.loop_forever();
+
+	def startBackground(self):
+		self.mqtt.loop_start();
 
 def test():
 	mq = zmqtt()
