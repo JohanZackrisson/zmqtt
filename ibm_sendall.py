@@ -13,11 +13,16 @@ import csvlog
 import time
 import os
 import ssl
+import visualize_data
+import socket
 
 mq = zmqtt.zmqtt()
 
 eventlog = csvlog.ZLogCustom("event.log", [ 'time', 'nodeid', 'nodetype', 'type', 'value', 'raw'])
 log = csvlog.ZLog("mqttevents.log")
+
+ds = visualize_data.DataStoreServer(socket.gethostname(), 8081)
+ds.ServeInBackground()
 
 """
 Knapp
@@ -100,9 +105,13 @@ def publish_ibm(nodeid, nodetype, evttype, value, rawdata):
 
 def logEvent(nodeid, nodetype, evttype, value, rawdata):
 	# [ 'time', 'nodeid', 'nodetype', 'type', 'value', 'raw']
-	eventlog.WriteEvent( { 'time': eventlog.FmtTimeNow(), 'nodeid' : nodeid, 'nodetype': nodetype, 'type': evttype, 'value': value, 'raw': rawdata} )
+	data = { 'time': eventlog.FmtTimeNow(), 'nodeid' : nodeid, 'nodetype': nodetype, 'type': evttype, 'value': value, 'raw': str(rawdata) }
+	eventlog.WriteEvent(data)
 	publish_ibm(nodeid, nodetype, evttype, value, rawdata)
+	ds.GetStore().Add(data)
 	print(nodeid, nodetype, evttype, value)
+	print()
+	print(eventlog.FmtTimeNow())
 
 
 @mq.trigger("#", json=False)

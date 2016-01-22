@@ -1,0 +1,383 @@
+<html>
+<head>
+    <title>Timeline demo</title>
+
+    <style type="text/css">
+        body {font: 10pt arial;}
+
+				div.timeline-event {
+					border: none;
+					background-color: white;
+					min-width: 1px;
+				}
+
+				div.valuebar {
+					border: none;
+					border-radius: 0;
+					height: 50px;
+					width: 100%;
+					position: relative;
+					overflow: visible;
+				}
+    </style>
+		
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+		<script src="http://jquery-csv.googlecode.com/git/src/jquery.csv.js"></script>
+    <script type="text/javascript" src="http://www.google.com/jsapi"></script>
+    <script type="text/javascript" src="timeline.js"></script>
+    <link rel="stylesheet" type="text/css" href="timeline.css">
+
+    <script type="text/javascript">
+		google.load("visualization", "1");
+
+		var urlSpreadsheet = "https://spreadsheets.google.com/a/almende.org/ccc?key=tpN13qnPm37g3qTXT5Hc9sg&hl=en#gid=0";
+		//var urlData = "event.csv";
+		var urlData = "event.log";
+
+		var liveUrl = "/api/data";
+
+		var initialized = false;
+		var query;
+		var vis;
+
+		// Set callback to run when API is loaded
+		google.setOnLoadCallback(initialize);
+
+		function initialize() {
+			initVis();
+			initialized = true;
+			//loadCSVFile(urlData);
+			setInterval(function(){ loadLiveData(liveUrl); }, 3000);
+			loadLiveData(liveUrl);
+		}
+
+
+function formatLiveData(data)
+{
+	out = [];
+	// time,nodeid,nodetype,type,value,raw
+	//{ 'time', 'nodeid', 'nodetype', 'type', 'value', 'raw'}
+	out[out.length] = ['time', 'nodeid', 'nodetype', 'type', 'value', 'raw'];
+	for (var key in data) {
+		var item = data[key];
+		out[out.length] = [ item.time, item.nodeid, item.nodetype, item.type, item.value, item.raw ];
+	}
+	return out;
+}
+
+function loadLiveData(url) {
+
+	$.get(url, function(data) {
+			console.log(data);
+			//plotRawData(data);
+			//plotArray(data);
+			formated = formatLiveData(data.data);
+			lastUpdated = data.lastUpdated;
+			console.log(formated);
+			plotArray(formated);
+	});
+}
+
+function loadCSVFile(file)
+{
+	$.get(file, function(data) {
+			data = $.csv.toArrays(data, {
+				        onParseValue: $.csv.hooks.castToScalar
+								      });
+			//console.log(data);
+			plotRawData(data);
+			plotArray(data);
+	});
+}
+
+
+var sensornames = {
+	"1": "Unknown",
+	"2": "Plug 1",
+	"3": "Plug 2",
+	"4": "Flood sensor 1",
+	"5": "Dimmer 1",
+	"6": "Dimmer 2",
+	"7": "Motion 1",
+	"8": "Switch 1",
+	"9": "Door Living room-kitchen",
+	"10": "Door Toilet-kitchen",
+	"11": "Motion Living room",
+	"12": "Motion Toilet",
+};
+
+function gatherEvents(data)
+{
+	var rv = [];
+	var lookup = {};
+	for (var key in data) {
+		var e = data[key];
+		if (e[0] == null) continue;
+		
+		var nodeid = e[1];
+		var type = e[3];
+		var value = e[4];
+		var entryKey = String(nodeid) + type;
+		var entry = lookup[entryKey];
+
+		var binarysensors = [ "basic", "sensor_binary" ];
+		var valuesensors = ["luminance", "air_temperature", "power"];
+
+		if (binarysensors.indexOf(type) >= 0) {
+
+			if (value == 255)
+			{
+				if (entry == undefined) {
+					lookup[entryKey] = rv.length;
+					// set end time to start time as a default value
+					e[6] = e[0];
+					rv[rv.length] = e;
+				}
+			}
+			else {
+				if (entry != undefined) {
+					rv[entry][6] = e[0];
+				}
+				//console.log("Exit: " + entry);
+				lookup[entryKey] = undefined;
+			}
+		}
+		else if (valuesensors.indexOf(type) >= 0)
+		{
+			if (entry == undefined) {
+				lookup[entryKey] = rv.length;
+				// set end time to start time as a default value
+				e[6] = e[0];
+				rv[rv.length] = e;
+			} else {
+				lookup[entryKey] = rv.length;
+				rv[entry][6] = e[0];
+				// set end time to start time as a default value
+				e[6] = e[0];
+				rv[rv.length] = e;
+			}
+		}
+		else {
+			e[6] = e[0]; //undefined;
+			rv[rv.length] = e;
+		}
+	}
+		for(var key in lookup) {
+		if (lookup[key]) {
+			rv[lookup[key]][6] = rv[rv.length-1][0];
+			//console.log(key);
+		}
+	}
+
+	return rv;
+}
+
+function toDate(d)
+{
+	var timeformat = d.replace(/ /, "T"); // safari doesn't like it otherwise
+	return new Date(timeformat);
+}
+
+var filter = [ 7, 9, 10, 11, 12 ]; 
+var dontshowtypes = [7, "unknown"];
+
+function transform(obj)
+{
+	if (obj[0] == null) {
+		return null;
+	}
+
+	var nodeid = obj[1];
+	if (false) {//filter.indexOf(nodeid) < 0) {
+	 	return null;
+	}
+
+	if (dontshowtypes.indexOf(obj[3]) >= 0) {
+		return null;
+	}
+
+	var sensorname = sensornames[obj[1]] + " (" + obj[1] + ")";
+	var timeformat = obj[0].replace(/ /, "T"); // safari doesn't like it otherwise
+	var datetime = new Date(timeformat);
+	rv = [
+		toDate(obj[0]),
+		obj[6] != undefined ? toDate(obj[6]) : undefined,
+	 	String(obj[4]),
+	 	sensorname+" "+obj[3],
+		"foobar"
+			];
+	return rv;
+}
+
+function initVis() {
+	var options = {
+		width:  "100%",
+		height: "auto",
+		editable: false,
+		layout: "box",
+		eventMargin: 5,  // minimal margin between events
+		eventMarginAxis: 0, // minimal margin beteen events and the axis
+		stackEvents: false,
+		showMajorLabels: false,
+		groupMinHeight: 25,
+		snapEvents: false,
+	};
+
+	vis = new links.Timeline(document.getElementById('mytimeline'), options);
+}
+
+function plotArray(data)
+{
+	data.shift();
+	data = gatherEvents(data);
+	data = data.map(transform);
+	data = data.filter( function(obj) { return obj != null; } );
+
+	console.log(data);
+
+	var dataTable = new google.visualization.DataTable();
+	dataTable.addColumn('date', 'start');
+	dataTable.addColumn('date', 'end');
+	dataTable.addColumn('string', 'content');
+	dataTable.addColumn('string', 'group');
+	dataTable.addColumn('string', 'className');
+	/*dataTable.addColumn('number', 'Node');
+	dataTable.addColumn('string', 'NodeType');
+	dataTable.addColumn('string', 'Type');
+	dataTable.addColumn('number', 'Value');
+	dataTable.addColumn('string', 'Raw');
+	*/
+	dataTable.addRows(data);
+
+	//var dataTable = new google.visualization.arrayToDataTable(data);
+/*	var chart = new google.visualization.drawChart({
+			"containerId": "mychart",
+			"dataTable": dataTable,
+			"refreshInterval": 5,
+			"chartType": "Table",
+			"options": {
+			"alternatingRowStyle": true,
+			"showRowNumber" : true,
+			}
+			});
+*/
+		// specify options
+		var options = {
+				width:  "100%",
+				height: "auto",
+				editable: false,
+				layout: "box",
+				eventMargin: 5,  // minimal margin between events
+				eventMarginAxis: 0, // minimal margin beteen events and the axis
+				stackEvents: false,
+				showMajorLabels: false,
+				groupMinHeight: 25,
+				snapEvents: false,
+		};
+
+		//vis = new links.Timeline(document.getElementById('mytimeline'), options);
+
+		// Draw our timeline with the created data and options
+		vis.draw(dataTable);
+
+}
+
+function plotRawData(data)
+{
+	data = data.filter( function(it) { return it && it[0] });
+	//console.log(data);
+
+	var dataTable = new google.visualization.arrayToDataTable(data);
+	var chart = new google.visualization.drawChart({
+			"containerId": "mychart",
+			"dataTable": dataTable,
+			"refreshInterval": 5,
+			"chartType": "Table",
+			"options": {
+			"alternatingRowStyle": true,
+			"showRowNumber" : true,
+			}
+			});
+}
+
+function load(url) {
+	if (!initialized) {
+		alert("One moment please... still busy loading Google Visualization API");
+		return;
+	}
+
+	if (url == undefined) {
+		dataSourceUrl = document.getElementById("dataSourceUrl").value
+	} else {
+		dataSourceUrl = url;
+	}
+
+	// if the entered url is a google spreadsheet url, replace the part
+	// "/ccc?" with "/tq?" in order to retrieve a neat data query result
+	if (dataSourceUrl.indexOf("/ccc?")) {
+		dataSourceUrl.replace("/ccc?", "/tq?");
+	}
+
+	var handleQueryResponse = function(response) {
+		if (response.isError()) {
+			alert('Error in query: ' + response.getMessage() + ', ' + response.getDetailedMessage());
+			return;
+		}
+
+		// retrieve the data from the query response
+		var data = response.getDataTable();
+
+		// specify options
+		var options = {
+				width:  "100%",
+				height: "300px",
+				editable: true,
+				layout: "box"
+		};
+
+		// Instantiate our timeline object.
+		vis = new links.Timeline(document.getElementById('mytimeline'), options);
+
+		// Draw our timeline with the created data and options
+		vis.draw(data);
+	}
+
+	query && query.abort();
+	query = new google.visualization.Query(dataSourceUrl);
+	query.send(handleQueryResponse);
+}
+
+function loadDataHtml() {
+	document.getElementById("dataSourceUrl").value = urlData;
+	load(urlData);
+}
+
+function loadSpreadSheet() {
+	document.getElementById("dataSourceUrl").value = urlSpreadsheet;
+	load(urlSpreadsheet);
+}
+    </script>
+</head>
+
+<body>
+<!--<p>Enter a datasource and click the button "Go".</p>
+<p>
+    Datasource: <input type="text" id="dataSourceUrl" value="data.php" style="width: 600px;">
+    <input type="button" value="Go" onclick="load();">
+    <input type="button" value="Go" onclick="loadCSVFile();">
+</p>
+<p>
+    Examples:
+</p>
+<p>
+    <a href="javascript:loadDataHtml();">Open data.php</a> (Works only if you run the example on a PHP server)<br>
+    <a href="javascript:loadSpreadSheet();">Open a Google spreadsheet</a>
+    (or <a href="" onclick="window.open(urlSpreadsheet); return false;">view</a> this sheet)<br>
+</p>
+-->
+<div id="mytimeline"></div>
+<div id="mychart"></div>
+<div id="mychart2"></div>
+
+</body>
+</html>
