@@ -15,13 +15,27 @@ import os
 import ssl
 import visualize_data
 import socket
+import mongolog
+from datainterface import DataInterface
 
 mq = zmqtt.zmqtt()
 
 eventlog = csvlog.ZLogCustom("event.log", [ 'time', 'nodeid', 'nodetype', 'type', 'value', 'raw'])
 log = csvlog.ZLog("mqttevents.log")
 
-ds = visualize_data.DataStoreServer(socket.gethostname(), 8081)
+mongolog = mongolog.MongoLog("logdata", "event_log")
+
+class MongoData(DataInterface):
+	def Data(self):
+		out = [] 
+		for item in mongolog.Query().sort("time", -1).limit(100):
+			del item["_id"]
+			out.append(item)
+		return out
+	def LastUpdate(self):
+		return mongolog.LastUpdate()
+
+ds = visualize_data.VisualizationServer(socket.gethostname(), 8081, MongoData())
 ds.ServeInBackground()
 
 """
@@ -108,11 +122,9 @@ def logEvent(nodeid, nodetype, evttype, value, rawdata):
 	data = { 'time': eventlog.FmtTimeNow(), 'nodeid' : nodeid, 'nodetype': nodetype, 'type': evttype, 'value': value, 'raw': str(rawdata) }
 	eventlog.WriteEvent(data)
 	publish_ibm(nodeid, nodetype, evttype, value, rawdata)
-	ds.GetStore().Add(data)
+	#ds.GetStore().Add(data)
+	mongolog.Log(data)
 	print(nodeid, nodetype, evttype, value)
-	print()
-	print(eventlog.FmtTimeNow())
-
 
 @mq.trigger("#", json=False)
 def all(topic, data):

@@ -70,32 +70,30 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type','application/json')
         self.end_headers()
-        url = urlparse.urlparse(self.path)
-        query = urlparse.parse_qs(url.query)
-        since = int(query["since"][0]) if "since" in query else 0
-        data = { 'data': self._data.GetSince(since), 'lastUpdate': int(self._data.LastUpdated()) }
+        #url = urlparse.urlparse(self.path)
+        #query = urlparse.parse_qs(url.query)
+        #since = int(query["since"][0]) if "since" in query else 0
+        data = { 'data': self._data.Data(), 'lastUpdate': int(self._data.LastUpdate()) }
+        print(data)
         self.wfile.write(json.dumps(data))
 
 class ThreadedHTTPServer(ThreadingMixIn, BaseHTTPServer.HTTPServer):
     """Handle requests in a separate thread."""
 
-class DataStoreServer(object):
-    def __init__(self, listenOn, port):
-        self._datastore = DataStorage()
+class VisualizationServer(object):
+    def __init__(self, listenOn, port, dataobj):
         self._listenOn = listenOn
         self._port = port
+        self._data = dataobj
         pass
 
     def ServeInBackground(self):
-        MyHandler._data = self._datastore
+        MyHandler._data = self._data
         self._server = ThreadedHTTPServer((self._listenOn,self._port), MyHandler)
 
         server_thread = threading.Thread(target=self._server.serve_forever)
         server_thread.daemon = True
         server_thread.start()
-
-    def GetStore(self):
-        return self._datastore
 
     def Close(self):
         self._server.shutdown()
@@ -105,14 +103,14 @@ if __name__ == '__main__':
     HOST_NAME = socket.gethostname() # 'example.net' # !!!REMEMBER TO CHANGE THIS!!!
     PORT_NUMBER = 8081 # Maybe set this to 9000.
 
-    ds = DataStoreServer(HOST_NAME, PORT_NUMBER)
-    ds.GetStore().Add({'some': 'data', 'something': 'else'})
-    ds.ServeInBackground()
+    #ds = DataStoreServer(HOST_NAME, PORT_NUMBER)
+    #ds.GetStore().Add({'some': 'data', 'something': 'else'})
+    #ds.ServeInBackground()
 
-    while True:
-        time.sleep(1)
-        print(".")
-        ds.GetStore().Add({'some': 'data', 'something': 'else'})
+    #while True:
+    #    time.sleep(1)
+    #    print(".")
+    #    ds.GetStore().Add({'some': 'data', 'something': 'else'})
 
 
     """datastore = DataStorage()

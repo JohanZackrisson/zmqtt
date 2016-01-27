@@ -24,7 +24,7 @@ class ZLogCustom(object):
 
 	@staticmethod
 	def FmtTimeNow():
-		return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+		return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f+0100") #swedish timezone.. ugly hack
 
 	def WriteEvent(self, row):
 		#time = strftime("%Y-%m-%d %H:%M:%S")
