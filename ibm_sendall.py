@@ -25,6 +25,7 @@ log = csvlog.ZLog("mqttevents.log")
 
 mongolog = mongolog.MongoLog("logdata", "event_log")
 
+"""
 class MongoData(DataInterface):
 	def Data(self):
 		out = [] 
@@ -37,6 +38,7 @@ class MongoData(DataInterface):
 
 ds = visualize_data.VisualizationServer(socket.gethostname(), 8081, MongoData())
 ds.ServeInBackground()
+"""
 
 """
 Knapp
