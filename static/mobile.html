@@ -1,0 +1,150 @@
+<html>
+<head>
+    <title>Timeline demo</title>
+
+    <style type="text/css">
+        body {font: 10pt arial;}
+    </style>
+	
+	<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+	<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js"></script>
+
+<!-- Latest compiled and minified CSS -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+
+<!-- Optional theme -->
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+
+<!-- Latest compiled and minified JavaScript -->
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<script type="text/javascript">
+$(function() {
+	var reportUrl = "/api/report/location";
+	var websocket = 'ws://127.0.0.1:9000/ws';
+	var user = $.cookie("user");
+
+	var ws = null;
+	var timer = null;
+	
+	if (user) {
+		$("#idinput").hide();
+		showReport();
+	}
+
+	function hasUser() {
+		return user != null;
+	}
+
+	function getUser() {
+		return user;
+	}
+
+	function reportLocation() {
+		if (!hasUser()) return;
+
+		if (navigator.geolocation) {
+        	navigator.geolocation.getCurrentPosition(
+        		function(position) {
+        			var latlon = position.coords.latitude + "," + position.coords.longitude;
+        			var data = { 'id' : getUser(), 'location': latlon };
+        			$.ajax({
+					  type: "POST",
+					  url: reportUrl,
+					  data: JSON.stringify(data),
+					  dataType: "json",
+					  contentType: "application/json",
+					  success: function() { }
+
+					});
+        		},
+        		function() {
+        			alert("Failed to get position");
+        		});
+    	} else {
+    		alert("browser doesn't support geolocation");
+    	}
+	}
+
+	function showReport() {
+		$("#deviceid").text(user);
+		$("#report").show();
+	}
+
+	function startWebsocket() {
+		ws = new WebSocket(websocket);
+
+		ws.onopen = function (event) {
+		  ws.send(JSON.stringify({some: "thing"}));
+		  timer = setInterval( function() { ws.send("hi")}, 1000);
+		}
+		ws.onmessage = function (event) {
+			console.log(event.data);
+		}
+		ws.onclose = function(event) {
+            console.log(event);
+        };
+	}
+
+	function stopWebsocket() {
+		if (ws) {
+			ws.close();
+			ws = null;
+		}
+		if (timer) {
+			clearInterval(timer);
+			timer = null;
+		}
+	}
+
+	$("#idbutton").click( function() {
+		var id = $("#id").val();
+		var letters = /^[0-9a-zA-Z]+$/;
+  		if (!letters.test(id)) {
+  			alert("Invalid username");
+  			return;
+  		}
+
+  		$.cookie("user", id);
+  		showReport();
+	});
+
+	$("#locationbutton").click( function() {
+		reportLocation();
+	});
+
+	$("#startbutton").click( function() {
+		startWebsocket();
+	})
+
+	$("#stopbutton").click( function() {
+		stopWebsocket();
+	})
+
+});
+
+</script>
+</head>
+
+<body>
+
+	<div id="idinput" class="container" class="form-group">
+	    <label for="id">Device ID</label>
+
+		<input id="id" type="text" name="id" class="form-control" />
+		<input id="idbutton" type="button" value="Set ID" class="btn btn-default" />
+	</div>
+	<div id="report" style="display: none;" class="container">
+		
+		<label for="deviceid">Device ID</label>
+		<span id="deviceid">Unset</span>
+		<input id="locationbutton" type="button" value="Report location" class="form-control" />
+		<br/>
+		<input id="startbutton" type="button" value="Start sending" class="form-control" />
+		<input id="stopbutton" type="button" value="Stop sending" class="form-control" />
+	</div>
+
+</body>
+</html>
