@@ -3,7 +3,16 @@
     <title>Timeline demo</title>
 
     <style type="text/css">
+ 	   @viewport {
+    		orientation: portrait;
+    	}
+}
         body {font: 10pt arial;}
+
+        #motiongraph {
+        	height: 200px;
+        }
+
     </style>
 	
 	<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
@@ -18,16 +27,32 @@
 <!-- Latest compiled and minified JavaScript -->
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.14.0/vis.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.14.0/vis.min.css" />
+
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <script type="text/javascript">
 $(function() {
 	var reportUrl = "/api/report/location";
-	var websocket = 'ws://127.0.0.1:9000/ws';
+	var websocket = 'ws://192.168.1.135:9000/ws';
 	var user = $.cookie("user");
+	var updateInterval = 200;
+	var shouldSendSensorData = true;
 
 	var ws = null;
 	var timer = null;
+
+	var graph2d = null;
+	var dataset = null;
+
+	// try to lock the orientation of the screen to just portrait mode.. not supported yet by most browsers
+	screen.lockOrientationUniversal = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation;
+	if (screen.lockOrientationUniversal) screen.lockOrientationUniversal("portrait");
+
+	setupSensors();
+	startWebsocket();
+	initGraph();
 	
 	if (user) {
 		$("#idinput").hide();
@@ -73,18 +98,51 @@ $(function() {
 		$("#report").show();
 	}
 
+	var ax = 0, ay = 0, az = 0, ra = 0, rb = 0, rg = 0;
+
+	function sendSensorData() {
+		if (!shouldSendSensorData) return;
+		ws.send(JSON.stringify( {'id': getUser(), 'type': 'motion', 'time': new Date().getTime(),
+			pos: [ ax.toFixed(3), ay.toFixed(3), az.toFixed(3), ra.toFixed(3), rb.toFixed(3), rg.toFixed(3) ]
+		}))
+	}
+
+	function setupSensors() {
+		if (window.DeviceMotionEvent == undefined) return;
+
+		window.ondevicemotion = function(e) {
+			ax = e.accelerationIncludingGravity.x;
+			if (ax == null) {
+				shouldSendSensorData = false;
+				window.ondevicemotion = null; // unsubscribe if we don't get any valid data
+				return;
+			}
+			ay = e.accelerationIncludingGravity.y;
+			az = e.accelerationIncludingGravity.z;
+			if ( e.rotationRate ) {
+				ra = e.rotationRate.alpha;
+				rb = e.rotationRate.beta;
+				rg = e.rotationRate.gamma;
+			}
+			//console.log(ax, ay, az)
+		}
+	}
+
 	function startWebsocket() {
 		ws = new WebSocket(websocket);
 
 		ws.onopen = function (event) {
 		  ws.send(JSON.stringify({some: "thing"}));
-		  timer = setInterval( function() { ws.send("hi")}, 1000);
+		  timer = setInterval( function() { sendSensorData(); }, updateInterval);
+		  setInterval( function() { ws.send("ping"); }, 1000);
 		}
 		ws.onmessage = function (event) {
-			console.log(event.data);
+			//console.log(event.data);
+			addDataPoint(event.data)
 		}
 		ws.onclose = function(event) {
             console.log(event);
+            stopWebsocket();
         };
 	}
 
@@ -97,6 +155,66 @@ $(function() {
 			clearInterval(timer);
 			timer = null;
 		}
+	}
+
+	function initGraph() {
+		dataset = new vis.DataSet();
+
+		var options = {
+		    start: vis.moment().add(-30, 'seconds'), // changed so its faster
+		    end: vis.moment(),
+		    dataAxis: {
+		      left: {
+		        range: {
+		          min:-15, max: 15
+		        }
+		      }
+		    },
+		    height: '200px',
+		    /*drawPoints: {
+		      style: 'circle' // square, circle
+		    },*/
+		    drawPoints: false,
+		    /*shaded: {
+		      orientation: 'bottom' // top, bottom
+		    }*/
+		  };
+		  graph2d = new vis.Graph2d(document.getElementById("motiongraph"), dataset, options);
+	}
+
+	function addDataPoint(p) {
+		var obj = null;
+		try {
+			obj = JSON.parse(p);
+		} catch(err) {
+
+		}
+		if (!obj) return;
+		if ("type" in obj) {
+			switch(obj.type) {
+				case "motion":
+					var t = new Date(obj.time);
+					dataset.add( { x: t, y: obj.pos[0], group: obj.id + "0" });
+					dataset.add( { x: t, y: obj.pos[1], group: obj.id + "1" });
+					dataset.add( { x: t, y: obj.pos[2], group: obj.id + "2" });
+				break;
+				default:
+					console.log("unknown data type: " + obj.type )
+			}
+		}
+
+		var range = graph2d.getWindow();
+	    var interval = range.end - range.start;
+
+	    var now = vis.moment();
+	    graph2d.setWindow(now - interval, now, {animation: false});
+
+	    var oldIds = dataset.getIds({
+	      filter: function (item) {
+	        return item.x < range.start - interval;
+	      }
+	    });
+	    dataset.remove(oldIds);
 	}
 
 	$("#idbutton").click( function() {
@@ -123,6 +241,10 @@ $(function() {
 		stopWebsocket();
 	})
 
+	$("#testbutton").click( function() {
+		ws.send("yo");
+	})
+
 });
 
 </script>
@@ -144,6 +266,10 @@ $(function() {
 		<br/>
 		<input id="startbutton" type="button" value="Start sending" class="form-control" />
 		<input id="stopbutton" type="button" value="Stop sending" class="form-control" />
+		<input id="testbutton" type="button" value="Send test" class="form-control" />
+	</div>
+	<div class="container">
+		<div id="motiongraph" />
 	</div>
 
 </body>
