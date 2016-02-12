@@ -39,7 +39,7 @@ $(function() {
 	var hostport = window.location.port;
 	var websocket = 'ws://' + hostname + (hostport ? (':' + hostport) : '') + '/ws';
 	var user = $.cookie("user");
-	var updateInterval = 200;
+	var updateInterval = 10;
 	var shouldSendSensorData = true;
 
 	var ws = null;
@@ -102,9 +102,17 @@ $(function() {
 
 	var ax = 0, ay = 0, az = 0, ra = 0, rb = 0, rg = 0;
 
+	function wsSend(data) {
+		if (!ws) return;
+		var THRESHOLD = 1024*10;
+		if (ws.bufferedAmount < THRESHOLD) {
+			ws.send(data)
+		}
+	}
+
 	function sendSensorData() {
 		if (!shouldSendSensorData) return;
-		ws.send(JSON.stringify( {'id': getUser(), 'type': 'motion', 'time': new Date().getTime(),
+		wsSend(JSON.stringify( {'id': getUser(), 'type': 'motion', 'time': new Date().getTime(),
 			pos: [ ax.toFixed(3), ay.toFixed(3), az.toFixed(3), ra.toFixed(3), rb.toFixed(3), rg.toFixed(3) ]
 		}))
 	}
@@ -134,9 +142,9 @@ $(function() {
 		ws = new WebSocket(websocket);
 
 		ws.onopen = function (event) {
-		  ws.send(JSON.stringify({some: "thing"}));
+		  //ws.send(JSON.stringify({some: "thing"}));
 		  timer = setInterval( function() { sendSensorData(); }, updateInterval);
-		  setInterval( function() { ws.send("ping"); }, 1000);
+		  //setInterval( function() { ws.send("ping"); }, 1000);
 		}
 		ws.onmessage = function (event) {
 			//console.log(event.data);
@@ -173,15 +181,9 @@ $(function() {
 		      }
 		    },
 		    height: '200px',
-		    /*drawPoints: {
-		      style: 'circle' // square, circle
-		    },*/
 		    drawPoints: false,
-		    /*shaded: {
-		      orientation: 'bottom' // top, bottom
-		    }*/
-		  };
-		  graph2d = new vis.Graph2d(document.getElementById("motiongraph"), dataset, options);
+		};
+		graph2d = new vis.Graph2d(document.getElementById("motiongraph"), dataset, options);
 	}
 
 	function addDataPoint(p) {
@@ -244,7 +246,7 @@ $(function() {
 	})
 
 	$("#testbutton").click( function() {
-		ws.send("yo");
+		wsSend("yo");
 	})
 
 });
