@@ -35,7 +35,9 @@
 <script type="text/javascript">
 $(function() {
 	var reportUrl = "/api/report/location";
-	var websocket = 'ws://192.168.1.135:9000/ws';
+	var hostname = window.location.hostname;
+	var hostport = window.location.port;
+	var websocket = 'ws://' + hostname + (hostport ? (':' + hostport) : '') + '/ws';
 	var user = $.cookie("user");
 	var updateInterval = 10;
 	var shouldSendSensorData = true;
