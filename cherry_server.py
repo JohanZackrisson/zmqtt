@@ -8,6 +8,7 @@ import os
 import mongolog
 import datetime
 from ws4py.messaging import TextMessage
+import json
 
 cherrypy.config.update({'server.socket_host': '0.0.0.0'})
 cherrypy.config.update({'server.socket_port': 9000})
@@ -15,7 +16,8 @@ WebSocketPlugin(cherrypy.engine).subscribe()
 cherrypy.tools.websocket = WebSocketTool()
 
 
-mongolog = mongolog.MongoLog("logdata", "event_log")
+eventlog = mongolog.MongoLog("logdata", "event_log")
+highspeedlog = mongolog.MongoLog("logdata", "high_log")
 
 
 class WebAPI(object):
@@ -28,11 +30,20 @@ class WebAPI(object):
     @cherrypy.tools.json_out()
     def data(self):
         out = []
-        for item in mongolog.Query().sort("time", -1).limit(100):
+        for item in eventlog.Query().sort("time", -1).limit(100):
             del item["_id"]
             out.append(item)
-        data = {'data': out, 'lastUpdate': int(mongolog.LastUpdate())}
+        data = {'data': out, 'lastUpdate': int(eventlog.LastUpdate())}
         return data
+
+    @cherrypy.expose
+    @cherrypy.tools.json_out()
+    def motion(self):
+        out = []
+        for item in highspeedlog.Query().sort("time", -1).limit(100):
+            del item["_id"]
+            out.append(item)
+        return out
 
 
 class WebAPIReport(object):
@@ -60,7 +71,7 @@ class WebAPIReport(object):
             'value': location,
             'raw': {'id': id, 'location': location}
         }
-        mongolog.Log(data)
+        eventlog.Log(data)
 
 
 class Root(object):
@@ -77,11 +88,35 @@ class Root(object):
 
 
 class MyWebSocket(WebSocket):
+    #count = 0
+
+    def __init__(self, *args, **kwargs):
+        super(MyWebSocket, self).__init__(*args, **kwargs)
+        self._lastSend = None
 
     def received_message(self, message):
-        #self.send(message.data, message.is_binary)
-        #self.send("Hello", False)
-        cherrypy.engine.publish('websocket-broadcast', message)
+        if isinstance(message, TextMessage):
+            s = str(message)
+            try:
+                obj = json.loads(s)
+            except ValueError:
+                return
+
+            type = obj["type"]
+            if type == "motion":
+                # print(self.count)
+                self.count = self.count + 1
+                highspeedlog.Log(obj)
+
+        # self.send(message.data, message.is_binary)
+        # self.send("Hello", False)
+        if not self._lastSend:
+            self._lastSend = datetime.datetime.now()
+
+        if datetime.datetime.now() > self._lastSend + datetime.timedelta(milliseconds=200):
+            # print("broadcast")
+            cherrypy.engine.publish('websocket-broadcast', message)
+            self._lastSend = datetime.datetime.now()
 
     def closed(self, code, reason="A client left the room without a proper explanation."):
         cherrypy.engine.publish('websocket-broadcast', TextMessage(reason))
