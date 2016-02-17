@@ -37,10 +37,20 @@ class WebAPI(object):
         return data
 
     @cherrypy.expose
+    @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
     def motion(self):
+        start = 0
+        end = 9000000000000
+        if cherrypy.request.method == "POST":
+            json_input = cherrypy.request.json
+            if not "start" in json_input or not "end" in json_input:
+                raise cherrypy.HTTPError(400, "Missing parameters")
+            start = int(json_input["start"])
+            end = int(json_input["end"])
+
         out = []
-        for item in highspeedlog.Query().sort("time", -1).limit(100):
+        for item in highspeedlog.Collection().find({"time": {"$gt": start, "$lt": end}}).sort("time", 1).limit(1000):
             del item["_id"]
             out.append(item)
         return out
@@ -88,7 +98,7 @@ class Root(object):
 
 
 class MyWebSocket(WebSocket):
-    #count = 0
+    # count = 0
 
     def __init__(self, *args, **kwargs):
         super(MyWebSocket, self).__init__(*args, **kwargs)
@@ -105,7 +115,7 @@ class MyWebSocket(WebSocket):
             type = obj["type"]
             if type == "motion":
                 # print(self.count)
-                self.count = self.count + 1
+                # self.count = self.count + 1
                 highspeedlog.Log(obj)
 
         # self.send(message.data, message.is_binary)
@@ -114,7 +124,7 @@ class MyWebSocket(WebSocket):
             self._lastSend = datetime.datetime.now()
 
         if datetime.datetime.now() > self._lastSend + datetime.timedelta(milliseconds=200):
-            # print("broadcast")
+            print("broadcast")
             cherrypy.engine.publish('websocket-broadcast', message)
             self._lastSend = datetime.datetime.now()
 
