@@ -82,28 +82,96 @@ function formatLiveData(data)
 	return out;
 }
 
-function loadMotionData(start, end) {
-
-	$.get(motionUrl, function(data) {
-			console.log(data);
-			//plotRawData(data);
-			//plotArray(data);
-			/*formated = formatLiveData(data.data);
-			lastUpdated = data.lastUpdated;
-			console.log(formated);
-			plotArray(formated);
-			*/
-
-			motionset.clear();
-
-			for(var i in data) {
-				var item = data[i];
-				//console.log(item)
-				motionset.add( {x: item.time, y: item.pos[0], group: item.id + "0" });
-				motionset.add( {x: item.time, y: item.pos[1], group: item.id + "1" });
-				motionset.add( {x: item.time, y: item.pos[2], group: item.id + "2" });
-			}
+function ajaxPost(url, data, success) {
+	$.ajax({
+	  type: "POST",
+	  url: url,
+	  data: JSON.stringify(data),
+	  dataType: "json",
+	  contentType: "application/json",
+	  success: success
 	});
+}
+
+var runNr = 0;
+
+function requestMotionChunks(start, end, run) {
+	ajaxPost(motionUrl, {start: start, end: end}, function(data) {
+		// data comes reversed, last to first, most important to show newer events
+		if (data.length == 0) {
+			console.log("END");
+			return;
+		}
+
+		if (run != runNr) {
+			console.log("RUN END");
+			return;
+		}
+
+		var pivot = data[data.length-1].time;
+		console.log("first/last: " + data[0].time + " " + data[data.length-1].time);
+		
+		out = [];
+
+		for(var i in data) {
+			var item = data[i];
+			//console.log(item)
+			out.push( {x: item.time, y: item.pos[0], group: item.id + "0" });
+			out.push( {x: item.time, y: item.pos[1], group: item.id + "1" });
+			out.push( {x: item.time, y: item.pos[2], group: item.id + "2" });
+		}
+		motionset.add(out);
+
+		requestMotionChunks(pivot, end, run);
+
+		// need more?
+	});
+}
+
+function loadWhenChanged(props) {
+	console.log("changed: " + props.start.getTime() + " " + props.end.getTime());
+	var s = props.start.getTime();
+	var e = props.end.getTime();
+
+	runNr = new Date().getTime()
+
+	motionset.clear();
+	requestMotionChunks(s, e, runNr);
+}
+
+function loadMotionData(start, end) {
+	var s = 0;
+	var e = 0;
+
+	if (motiongraph) {
+		s = motiongraph.getWindow().start.getTime();
+		e = motiongraph.getWindow().end.getTime();
+	}
+
+	runNr = new Date().getTime()
+
+	console.log("start/end : " + s + " " + e);
+
+	motionset.clear();
+	requestMotionChunks(s, e, runNr);
+
+	/*ajaxPost(motionUrl, {start: s, end: e}, function(data) {
+		// data comes reversed, last to first, most important to show newer events
+		if (data.length == 0) return;
+		console.log("first/last: " + data[0].time + " " + data[data.length-1].time);
+		
+		out = [];
+
+		for(var i in data) {
+			var item = data[i];
+			//console.log(item)
+			out.push( {x: item.time, y: item.pos[0], group: item.id + "0" });
+			out.push( {x: item.time, y: item.pos[1], group: item.id + "1" });
+			out.push( {x: item.time, y: item.pos[2], group: item.id + "2" });
+		}
+		motionset.add(out);
+	});
+	*/
 }
 
 function loadLiveData(url) {
@@ -252,19 +320,31 @@ function initVis() {
 	motionset = new vis.DataSet();
 
 	var motionoptions = {
-		//start: vis.moment().add(-30, 'seconds'), // changed so its faster
-		//end: vis.moment(),
+		start: vis.moment().add(-1, 'minutes'), // changed so its faster
+		end: vis.moment(),
 		dataAxis: {
-		left: {
-			range: {
-			  	min:-15, max: 15
+			left: {
+				range: {
+			  		min:-15, max: 15
 				}
 			}
 		},
-		height: '200px',
-		drawPoints: false,
+		zoomMax: 1000*60*10,
+		zoomMin: 1000*20,
+		height: '300px',
+		//drawPoints: false,
+		drawPoints: {
+          enabled: true,
+          size: 0.1,
+          style: 'square' // square, circle
+      	},
+		sort: true,
+    	sampling:true,
+    	style:'points',
+    	legend: true,
 	};
 	motiongraph = new vis.Graph2d(document.getElementById("motiongraph"), motionset, motionoptions);
+	motiongraph.on("rangechanged", loadWhenChanged);
 
 	loadMotionData(0,0);
 }
@@ -321,10 +401,12 @@ function plotArray(data)
     (or <a href="" onclick="window.open(urlSpreadsheet); return false;">view</a> this sheet)<br>
 </p>
 -->
-<div id="eventgraph"></div>
+<div class="container">
+	<div id="eventgraph"></div>
 
-<div id="motiongraph"></div>
-<div id="mychart2"></div>
+	<div id="motiongraph"></div>
+	<div id="mychart2"></div>
+</div>
 
 </body>
 </html>

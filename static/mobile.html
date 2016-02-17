@@ -39,7 +39,7 @@ $(function() {
 	var hostport = window.location.port;
 	var websocket = 'ws://' + hostname + (hostport ? (':' + hostport) : '') + '/ws';
 	var user = $.cookie("user");
-	var updateInterval = 10;
+	var updateInterval = 50;
 	var shouldSendSensorData = true;
 
 	var ws = null;
