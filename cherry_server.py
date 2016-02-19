@@ -83,6 +83,32 @@ class WebAPIReport(object):
         }
         eventlog.Log(data)
 
+    @cherrypy.expose
+    @cherrypy.tools.json_out()
+    @cherrypy.tools.json_in()
+    def motionevent(self):
+        if cherrypy.request.method == "POST":
+            # print(cherrypy.request.json)
+            json_input = cherrypy.request.json
+            if not "id" in json_input or not "type" in json_input or not "location" in json_input or not "force" in json_input:
+                raise cherrypy.HTTPError(400, "Missing parameters")
+            self._ReportMotionEvent(json_input["id"], json_input["type"], json_input[
+                                    "location"], json_input["force"])
+            return {"result": "Reported"}
+
+        return {"result": "No"}
+
+    def _ReportMotionEvent(self, id, type, location, force):
+        data = {
+            'time': datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f+01:00"),
+            'nodeid': id,
+            'nodetype': 'browser',
+            'type': type,
+            'value': location,
+            'raw': {'id': id, 'location': location, 'force': force}
+        }
+        eventlog.Log(data)
+
 
 class Root(object):
 
