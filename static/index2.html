@@ -33,6 +33,9 @@
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.14.0/vis.min.js"></script>
+
+<script src="http://maps.googleapis.com/maps/api/js"></script>
+
 <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.14.0/vis.min.css" />
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -180,6 +183,9 @@ function loadLiveData(url) {
 			//console.log(data);
 			//plotRawData(data);
 			//plotArray(data);
+
+			updateMapInfo(data);
+
 			formated = formatLiveData(data.data);
 			lastUpdated = data.lastUpdated;
 			//console.log(formated);
@@ -304,6 +310,8 @@ function transform(obj)
 	return rv;
 }
 
+var googlemap = null;
+
 function initVis() {
 	eventset = new vis.DataSet();
 	eventgroupset = new vis.DataSet();
@@ -346,7 +354,38 @@ function initVis() {
 	motiongraph = new vis.Graph2d(document.getElementById("motiongraph"), motionset, motionoptions);
 	motiongraph.on("rangechanged", loadWhenChanged);
 
+	googlemap = new google.maps.Map(document.getElementById('mygooglemap'), {
+    	zoom: 15,
+    	center: {lat: 56.182046, lng: 15.591511}
+  	});
+
 	loadMotionData(0,0);
+}
+
+var markers = [];
+
+function updateMapInfo(data) {
+	for (var i = 0; i < markers.length; i++) {
+    	markers[i].setMap(null);
+  	}
+
+  	markers = [];
+
+	var entries = data.data;
+	for(var i in entries) {
+		var entry = entries[i];
+		if (entry.type == "fall") {
+			var latlong = entry.value.split(",");
+			var lat = parseFloat(latlong[0]);
+			var long = parseFloat(latlong[1]);
+			var pos = {lat: lat, lng: long };
+			var marker = new google.maps.Marker({
+			    position: pos,
+			    map: googlemap
+			});
+  			markers.push(marker);
+		}
+	}
 }
 
 function getGroups(data) {
@@ -405,7 +444,7 @@ function plotArray(data)
 	<div id="eventgraph"></div>
 
 	<div id="motiongraph"></div>
-	<div id="mychart2"></div>
+	<div id="mygooglemap" style="width:500px;height:380px;"></div>
 </div>
 
 </body>
