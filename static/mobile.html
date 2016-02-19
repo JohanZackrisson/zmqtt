@@ -35,6 +35,7 @@
 <script type="text/javascript">
 $(function() {
 	var reportUrl = "/api/report/location";
+	var motionUrl = "/api/report/motionevent";
 	var hostname = window.location.hostname;
 	var hostport = window.location.port;
 	var websocket = 'ws://' + hostname + (hostport ? (':' + hostport) : '') + '/ws';
@@ -47,6 +48,10 @@ $(function() {
 
 	var graph2d = null;
 	var dataset = null;
+
+	var lastTrigger = new Date().getTime();
+
+	getLocation(function() {})
 
 	// try to lock the orientation of the screen to just portrait mode.. not supported yet by most browsers
 	screen.lockOrientationUniversal = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation;
@@ -69,30 +74,30 @@ $(function() {
 		return user;
 	}
 
+	function getLocation( f ) {
+		if (navigator.geolocation) {
+        	navigator.geolocation.getCurrentPosition( f );
+        } else {
+    		alert("browser doesn't support geolocation");
+    	}
+	}
+
 	function reportLocation() {
 		if (!hasUser()) return;
 
-		if (navigator.geolocation) {
-        	navigator.geolocation.getCurrentPosition(
-        		function(position) {
-        			var latlon = position.coords.latitude + "," + position.coords.longitude;
-        			var data = { 'id' : getUser(), 'location': latlon };
-        			$.ajax({
-					  type: "POST",
-					  url: reportUrl,
-					  data: JSON.stringify(data),
-					  dataType: "json",
-					  contentType: "application/json",
-					  success: function() { }
-
-					});
-        		},
-        		function() {
-        			alert("Failed to get position");
-        		});
-    	} else {
-    		alert("browser doesn't support geolocation");
-    	}
+		getLocation(
+			function(position) {
+				var latlon = position.coords.latitude + "," + position.coords.longitude;
+				var data = { 'id' : getUser(), 'location': latlon };
+				$.ajax({
+				  type: "POST",
+				  url: reportUrl,
+				  data: JSON.stringify(data),
+				  dataType: "json",
+				  contentType: "application/json",
+				  success: function() { }
+				});
+			});
 	}
 
 	function showReport() {
@@ -101,6 +106,17 @@ $(function() {
 	}
 
 	var ax = 0, ay = 0, az = 0, ra = 0, rb = 0, rg = 0;
+
+	function ajaxPost(url, data, success) {
+		$.ajax({
+		  type: "POST",
+		  url: url,
+		  data: JSON.stringify(data),
+		  dataType: "json",
+		  contentType: "application/json",
+		  success: success
+		});
+	}
 
 	function wsSend(data) {
 		if (!ws) return;
@@ -135,7 +151,35 @@ $(function() {
 				rg = e.rotationRate.gamma;
 			}
 			//console.log(ax, ay, az)
+
+			var now = new Date().getTime();
+
+			if (lastTrigger + 5*1000 > now) return;
+
+			var x = e.acceleration.x;
+			var y = e.acceleration.y;
+			var z = e.acceleration.z;
+
+			var a = Math.sqrt(x*x+y*y+z*z);
+			//console.log(a);
+			if (a < 50.0) return;
+
+			lastTrigger = now;
+			reportMotionEvent(a);
 		}
+	}
+
+	function reportMotionEvent(force) {
+		if (!hasUser()) return;
+
+		console.log("Report motion event");
+
+		getLocation(
+			function(position) {
+				var latlon = position.coords.latitude + "," + position.coords.longitude;
+				var data = { 'id' : getUser(), 'location': latlon, 'force': force, 'type': 'fall' };
+				ajaxPost(motionUrl, data, function() {})
+			});
 	}
 
 	function startWebsocket() {
