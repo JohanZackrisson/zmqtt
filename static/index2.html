@@ -374,19 +374,27 @@ function updateMapInfo(data) {
 	var entries = data.data;
 	for(var i in entries) {
 		var entry = entries[i];
-		if (entry.type == "fall") {
+		if ((entry.type == "fall") || (entry.type == "location")) {
 			var latlong = entry.value.split(",");
 			var lat = parseFloat(latlong[0]);
 			var long = parseFloat(latlong[1]);
 			var pos = {lat: lat, lng: long };
 			var marker = new google.maps.Marker({
 			    position: pos,
-			    map: googlemap
+			    map: googlemap,
+			    icon: (entry.type == "fall" ? "http://maps.google.com/mapfiles/ms/icons/red-dot.png" : "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png")
 			});
   			markers.push(marker);
 		}
 	}
 }
+
+// resize handler
+google.maps.event.addDomListener(window, "resize", function() {
+ var center = googlemap.getCenter();
+ google.maps.event.trigger(googlemap, "resize");
+ googlemap.setCenter(center); 
+});
 
 function getGroups(data) {
 	map = {}
@@ -444,7 +452,7 @@ function plotArray(data)
 	<div id="eventgraph"></div>
 
 	<div id="motiongraph"></div>
-	<div id="mygooglemap" style="width:500px;height:380px;"></div>
+	<div id="mygooglemap" style="height:380px;"></div>
 </div>
 
 </body>
