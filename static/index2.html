@@ -312,23 +312,34 @@ function transform(obj)
 
 var googlemap = null;
 
+function getLocation( f ) {
+	if (navigator.geolocation) {
+    	navigator.geolocation.getCurrentPosition( f );
+    } else {
+		alert("browser doesn't support geolocation");
+	}
+}
+
 function initVis() {
 	eventset = new vis.DataSet();
 	eventgroupset = new vis.DataSet();
 
 	var options = {
+		start: vis.moment().add(-8, 'hours'),
+		end: vis.moment(),
 	    editable: false,
     	margin: {item: 0},
-	    height: '200px',
+	    //height: '200px',
 	    groupOrder: 'content',
 	    stack: false,
+	    zoomMax: 1000*60*60*24*400,
 	};
 	eventgraph = new vis.Timeline(document.getElementById("eventgraph"), eventset, eventgroupset, options);
 
 	motionset = new vis.DataSet();
 
 	var motionoptions = {
-		start: vis.moment().add(-1, 'minutes'), // changed so its faster
+		start: vis.moment().add(-1, 'minutes'),
 		end: vis.moment(),
 		dataAxis: {
 			left: {
@@ -351,6 +362,7 @@ function initVis() {
     	style:'points',
     	legend: true,
 	};
+
 	motiongraph = new vis.Graph2d(document.getElementById("motiongraph"), motionset, motionoptions);
 	motiongraph.on("rangechanged", loadWhenChanged);
 
@@ -358,6 +370,10 @@ function initVis() {
     	zoom: 15,
     	center: {lat: 56.182046, lng: 15.591511}
   	});
+
+	getLocation( function(position) {
+		googlemap.setCenter({lat: position.coords.latitude, lng: position.coords.longitude});
+	});  	
 
 	loadMotionData(0,0);
 }
